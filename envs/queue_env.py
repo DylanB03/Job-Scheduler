@@ -20,6 +20,15 @@ class QueueEnv(gym.Env):
         self.total_jobs = total_jobs if total_jobs is not None else max_jobs * 3
         self.max_steps = max_steps
         self.num_job_features = 4
+        self.reward_weights = {
+            "completion_bonus": 1.0,
+            "priority": 2.0,
+            "processing_time": 0.1,
+            "wait_time": 0.2,
+            "tardiness": 1.0,
+            "drop": 2.0,
+            "invalid_action": 2.0,
+        }
 
         self.current_time = 0.0
         self.steps_taken = 0
@@ -93,7 +102,9 @@ class QueueEnv(gym.Env):
         *,
         invalid_action: bool = False,
         wait_time: float = 0.0,
+        sojourn_time: float = 0.0,
         tardiness: float = 0.0,
+        deadline_miss: bool = False,
         dropped_this_step: int = 0,
     ) -> dict:
         
@@ -101,7 +112,9 @@ class QueueEnv(gym.Env):
         return {
             "invalid_action": invalid_action,
             "wait_time": float(wait_time),
+            "sojourn_time": float(sojourn_time),
             "tardiness": float(tardiness),
+            "deadline_miss": int(deadline_miss),
             "queue_length": int(self.queue_length),
             "completed_jobs": int(self.completed_jobs),
             "jobs_left": int(jobs_left),
@@ -145,6 +158,8 @@ class QueueEnv(gym.Env):
         if self.queue_length > 0 or self.next_job_idx >= len(self.jobs):
             return 0
 
+        # When the server is idle and the queue is empty, jump the clock forward
+        # to the next job arrival so the agent always acts on currently available work.
         self.current_time = float(self.jobs[self.next_job_idx, 3])
         return self._admit_arrivals(self.current_time)
 
@@ -204,7 +219,7 @@ class QueueEnv(gym.Env):
 
         if action >= self.queue_length:
             self.invalid_actions += 1
-            reward = -2.0
+            reward = -self.reward_weights["invalid_action"]
             terminated = bool(self.next_job_idx >= len(self.jobs) and self.queue_length == 0)
             truncated = bool(self.steps_taken >= self.max_steps_limit and not terminated)
             return (
@@ -225,15 +240,19 @@ class QueueEnv(gym.Env):
 
         service_end_time = self.current_time + float(processing_time)
         self.current_time = service_end_time
+        # All jobs that arrived while this job was in service become visible now.
         dropped_this_step += self._admit_arrivals(service_end_time)
 
+        sojourn_time = max(0.0, service_end_time - float(arrival_time))
         tardiness = max(0.0, service_end_time - float(deadline))
+        deadline_miss = tardiness > 0.0
         reward = (
-            2.0 * float(priority)
-            - 0.1 * float(processing_time)
-            - 0.2 * wait_time
-            - tardiness
-            - 2.0 * dropped_this_step
+            self.reward_weights["completion_bonus"]
+            + self.reward_weights["priority"] * float(priority)
+            - self.reward_weights["processing_time"] * float(processing_time)
+            - self.reward_weights["wait_time"] * wait_time
+            - self.reward_weights["tardiness"] * tardiness
+            - self.reward_weights["drop"] * dropped_this_step
         )
 
         self.completed_jobs += 1
@@ -249,7 +268,9 @@ class QueueEnv(gym.Env):
             self._get_info(
                 invalid_action=False,
                 wait_time=wait_time,
+                sojourn_time=sojourn_time,
                 tardiness=tardiness,
+                deadline_miss=deadline_miss,
                 dropped_this_step=dropped_this_step,
             ),
         )

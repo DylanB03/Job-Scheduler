@@ -1,3 +1,3 @@
-__all__ = ["eval_all", "heuristics", "train_ppo"]
+__all__ = ["eval_all", "heuristics", "ppo_agent", "train_ppo"]
 
-from . import eval_all, heuristics, train_ppo
+from . import eval_all, heuristics, ppo_agent, train_ppo

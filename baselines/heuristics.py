@@ -4,6 +4,18 @@ from typing import Optional, Sequence
 import gymnasium as gym
 import numpy as np
 
+from config.base_config import hyperparams_config
+
+
+def _resolve_eval_defaults(
+    n_episodes: Optional[int], base_seed: Optional[int]
+) -> tuple[int, int]:
+    config = hyperparams_config()
+    resolved_episodes = config["episodes"] if n_episodes is None else n_episodes
+    resolved_seed = config["seed"] if base_seed is None else base_seed
+    return resolved_episodes, resolved_seed
+
+
 # all baselines return the discrete index int as described in the action space
 class HeuristicBaseline(ABC):
     name = "heuristic"
@@ -30,7 +42,9 @@ class HeuristicBaseline(ABC):
 
         total_reward = 0.0
         total_wait_time = 0.0
+        total_sojourn_time = 0.0
         total_tardiness = 0.0
+        deadline_misses = 0
         invalid_actions = 0
         dropped_jobs = 0
         steps = 0
@@ -43,20 +57,31 @@ class HeuristicBaseline(ABC):
 
             total_reward += float(reward)
             total_wait_time += float(info["wait_time"])
+            total_sojourn_time += float(info["sojourn_time"])
             total_tardiness += float(info["tardiness"])
+            deadline_misses += int(info["deadline_miss"])
             invalid_actions += int(info["invalid_action"])
             dropped_jobs += int(info["dropped_this_step"])
             steps += 1
 
+        completed_jobs = int(info["completed_jobs"])
+        served_jobs = max(completed_jobs, 1)
+
         return {
             "reward": total_reward,
-            "wait_time": total_wait_time,
-            "tardiness": total_tardiness,
+            "total_wait_time": total_wait_time,
+            "total_sojourn_time": total_sojourn_time,
+            "total_tardiness": total_tardiness,
+            "wait_time": total_wait_time / served_jobs,
+            "sojourn_time": total_sojourn_time / served_jobs,
+            "tardiness": total_tardiness / served_jobs,
+            "deadline_misses": deadline_misses,
+            "deadline_miss_rate": deadline_misses / served_jobs,
             "invalid_actions": invalid_actions,
             "invalid_action_rate": invalid_actions / max(steps, 1),
             "dropped_jobs": dropped_jobs,
             "steps": steps,
-            "completed_jobs": int(info["completed_jobs"]),
+            "completed_jobs": completed_jobs,
             "jobs_left": int(info["jobs_left"]),
             "terminated": bool(terminated),
             "truncated": bool(truncated),
@@ -65,11 +90,12 @@ class HeuristicBaseline(ABC):
     def evaluate(
         self,
         env: gym.Env,
-        n_episodes: int = 10,
+        n_episodes: Optional[int] = None,
         *,
-        base_seed: int = 0,
+        base_seed: Optional[int] = None,
         job_sets: Optional[Sequence[np.ndarray]] = None,
     ) -> dict:
+        n_episodes, base_seed = _resolve_eval_defaults(n_episodes, base_seed)
         
         if job_sets is not None and len(job_sets) < n_episodes:
             raise ValueError("job_sets must contain at least n_episodes items")
@@ -87,8 +113,14 @@ class HeuristicBaseline(ABC):
             "mean_wait_time": float(
                 np.mean([ep["wait_time"] for ep in episode_results])
             ),
+            "mean_sojourn_time": float(
+                np.mean([ep["sojourn_time"] for ep in episode_results])
+            ),
             "mean_tardiness": float(
                 np.mean([ep["tardiness"] for ep in episode_results])
+            ),
+            "mean_deadline_miss_rate": float(
+                np.mean([ep["deadline_miss_rate"] for ep in episode_results])
             ),
             "mean_invalid_action_rate": float(
                 np.mean([ep["invalid_action_rate"] for ep in episode_results])
@@ -186,11 +218,12 @@ def build_default_baselines() -> list[HeuristicBaseline]:
 def evaluate_baselines(
     baselines: Sequence[HeuristicBaseline],
     env: gym.Env,
-    n_episodes: int = 10,
+    n_episodes: Optional[int] = None,
     *,
-    base_seed: int = 0,
+    base_seed: Optional[int] = None,
     job_sets: Optional[Sequence[np.ndarray]] = None,
 ) -> list[dict]:
+    n_episodes, base_seed = _resolve_eval_defaults(n_episodes, base_seed)
     
     return [
         baseline.evaluate(
