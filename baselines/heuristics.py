@@ -9,7 +9,7 @@ class HeuristicBaseline(ABC):
     name = "heuristic"
 
     def _active_indices(self, env: gym.Env) -> np.ndarray:
-        return np.flatnonzero(env.active_mask == 1)
+        return np.arange(env.queue_length, dtype=np.int32)
 
     @abstractmethod
     def select_action(self, env: gym.Env, obs: np.ndarray) -> int:
@@ -24,7 +24,7 @@ class HeuristicBaseline(ABC):
     ) -> dict:
         
         if jobs is not None:
-            obs, info = env.reset(seed=seed, options=jobs)
+            obs, info = env.reset(seed=seed, options={"jobs": jobs})
         else:
             obs, info = env.reset(seed=seed)
 
@@ -32,6 +32,7 @@ class HeuristicBaseline(ABC):
         total_wait_time = 0.0
         total_tardiness = 0.0
         invalid_actions = 0
+        dropped_jobs = 0
         steps = 0
         terminated = False
         truncated = False
@@ -44,6 +45,7 @@ class HeuristicBaseline(ABC):
             total_wait_time += float(info["wait_time"])
             total_tardiness += float(info["tardiness"])
             invalid_actions += int(info["invalid_action"])
+            dropped_jobs += int(info["dropped_this_step"])
             steps += 1
 
         return {
@@ -52,6 +54,7 @@ class HeuristicBaseline(ABC):
             "tardiness": total_tardiness,
             "invalid_actions": invalid_actions,
             "invalid_action_rate": invalid_actions / max(steps, 1),
+            "dropped_jobs": dropped_jobs,
             "steps": steps,
             "completed_jobs": int(info["completed_jobs"]),
             "jobs_left": int(info["jobs_left"]),
@@ -90,6 +93,9 @@ class HeuristicBaseline(ABC):
             "mean_invalid_action_rate": float(
                 np.mean([ep["invalid_action_rate"] for ep in episode_results])
             ),
+            "mean_dropped_jobs": float(
+                np.mean([ep["dropped_jobs"] for ep in episode_results])
+            ),
             "mean_completed_jobs": float(
                 np.mean([ep["completed_jobs"] for ep in episode_results])
             ),
@@ -123,8 +129,7 @@ class FifoBaseline(HeuristicBaseline):
         if active_indices.size == 0:
             return 0
 
-        # arrival time column wit row of active mask == 1
-        arrival_times = env.jobs[active_indices, 3]
+        arrival_times = env.queue[active_indices, 3]
         order = np.lexsort((active_indices, arrival_times))
         return int(active_indices[order[0]])
 
@@ -137,7 +142,7 @@ class TimeBaseline(HeuristicBaseline):
         if active_indices.size == 0:
             return 0
 
-        processing_times = env.jobs[active_indices, 0]
+        processing_times = env.queue[active_indices, 0]
         order = np.lexsort((active_indices, processing_times))
         return int(active_indices[order[0]])
 
@@ -150,7 +155,7 @@ class DeadlineBaseline(HeuristicBaseline):
         if active_indices.size == 0:
             return 0
 
-        deadlines = env.jobs[active_indices, 2]
+        deadlines = env.queue[active_indices, 2]
         order = np.lexsort((active_indices, deadlines))
         return int(active_indices[order[0]])
 
@@ -163,7 +168,7 @@ class PriorityBaseline(HeuristicBaseline):
         if active_indices.size == 0:
             return 0
 
-        priorities = env.jobs[active_indices, 1]
+        priorities = env.queue[active_indices, 1]
         order = np.lexsort((active_indices, -priorities))
         return int(active_indices[order[0]])
 

@@ -20,7 +20,7 @@ def print_summary_table(results: list[dict]) -> None:
         "reward",
         "wait",
         "tardiness",
-        "invalid_rate",
+        "drops",
         "success",
     ]
     rows = []
@@ -31,7 +31,7 @@ def print_summary_table(results: list[dict]) -> None:
                 f'{result["mean_reward"]:.2f}',
                 f'{result["mean_wait_time"]:.2f}',
                 f'{result["mean_tardiness"]:.2f}',
-                f'{result["mean_invalid_action_rate"]:.2f}',
+                f'{result["mean_dropped_jobs"]:.2f}',
                 f'{result["success_rate"]:.2f}',
             ]
         )
@@ -65,7 +65,7 @@ def plot_results(results: list[dict], out_dir: Path) -> Path:
         ("mean_reward", "Mean Reward"),
         ("mean_wait_time", "Mean Wait Time"),
         ("mean_tardiness", "Mean Tardiness"),
-        ("mean_invalid_action_rate", "Invalid Action Rate"),
+        ("mean_dropped_jobs", "Mean Dropped Jobs"),
     ]
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -89,19 +89,19 @@ def plot_results(results: list[dict], out_dir: Path) -> Path:
 def main() -> None:
     args = hyperparams_config()
 
-    env = QueueEnv(max_jobs=args.max_jobs, max_steps=args.max_steps)
+    env = QueueEnv(max_jobs=args["max_jobs"], max_steps=args["max_steps"])
     baselines = build_default_baselines()
     results = evaluate_baselines(
         baselines,
         env,
-        n_episodes=args.episodes,
-        base_seed=args.seed,
+        n_episodes=args["episodes"],
+        base_seed=args["seed"],
     )
 
     print_summary_table(results)
 
-    json_path = save_results(results, args.output_dir)
-    plot_path = plot_results(results, args.output_dir)
+    json_path = save_results(results, args["output_dir"])
+    plot_path = plot_results(results, args["output_dir"])
 
     print()
     print(f"Saved benchmark data to {json_path}")
