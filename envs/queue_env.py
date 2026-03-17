@@ -1,11 +1,11 @@
 from typing import Optional
 
 import gymnasium as gym
+from stable_baselines3.common.env_checker import check_env
 import numpy as np
 
 
 class QueueEnv(gym.Env):
-    metadata = {"render_modes": []}
 
     def __init__(self, max_jobs: int = 10, max_steps: Optional[int] = None):
         self.max_jobs = max_jobs
@@ -174,3 +174,9 @@ class QueueEnv(gym.Env):
                 tardiness=tardiness,
             ),
         )
+
+
+if __name__ == "__main__":
+    #verify against SB3, warnings are outputed if they exist
+    env = QueueEnv()
+    check_env(env)

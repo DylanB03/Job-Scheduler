@@ -1224,6 +1224,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "gymnasium" },
+    { name = "matplotlib" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "stable-baselines3" },
@@ -1232,6 +1233,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "gymnasium" },
+    { name = "matplotlib" },
     { name = "numpy" },
     { name = "stable-baselines3" },
 ]
