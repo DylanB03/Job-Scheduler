@@ -1,0 +1,18 @@
+[project]
+name = "rlqueuehandler"
+version = "0.1.0"
+description = "RL project using a custom Gymnasium environment and PPO."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "gymnasium",
+    "numpy",
+    "stable-baselines3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = false
