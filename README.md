@@ -136,19 +136,6 @@ This makes the project a useful case study in:
 - action masking for dynamic discrete action spaces
 - interpreting RL results beyond just reward curves
 
-## Interview Framing
-
-A strong way to describe this project is:
-
-> I built a custom Gymnasium queueing environment, benchmarked classical
-> dispatching heuristics against MaskablePPO and a custom PPO agent, and used
-> the results to study reward-metric alignment and why shortest-processing-time
-> can be a very strong baseline in a queueing system.
-
-The interesting result is not only whether PPO wins. The more valuable lesson
-is understanding when RL helps, when a heuristic is structurally strong, and
-how the choice of reward function changes what the agent learns.
-
 ## Notebook Flow
 
 Open [remote_train/collab.ipynb](/home/dylan/projects/rlQueueHandler/remote_train/collab.ipynb) and run:
