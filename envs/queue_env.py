@@ -58,6 +58,11 @@ class QueueEnv(gym.Env):
         # Action i means "serve the job currently stored in queue slot i".
         self.action_space = gym.spaces.Discrete(self.max_jobs)
 
+    def action_masks(self) -> np.ndarray:
+        mask = np.zeros(self.max_jobs, dtype=bool)
+        mask[: self.queue_length] = True
+        return mask
+
     def _sample_jobs(self, num_jobs: int) -> np.ndarray:
         
         processing_times = self.np_random.integers(
@@ -256,6 +261,7 @@ class QueueEnv(gym.Env):
         )
 
         self.completed_jobs += 1
+        dropped_this_step += self._advance_to_next_arrival()
 
         terminated = bool(self.next_job_idx >= len(self.jobs) and self.queue_length == 0)
         truncated = bool(self.steps_taken >= self.max_steps_limit and not terminated)

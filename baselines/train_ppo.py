@@ -1,8 +1,9 @@
 from pathlib import Path
 import sys
 
-from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.utils import get_action_masks
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -25,7 +26,7 @@ class PPOTrainer:
             seed=self.config["seed"],
         )
 
-        self.model = PPO(
+        self.model = MaskablePPO(
             policy="MlpPolicy",
             env=self.vec_env,
             learning_rate=self.config["learning_rate"],
@@ -60,7 +61,7 @@ class PPOTrainer:
         resolved_path = Path(model_path)
         if resolved_path.suffix != ".zip":
             resolved_path = resolved_path.with_suffix(".zip")
-        self.model = PPO.load(resolved_path, env=self.vec_env)
+        self.model = MaskablePPO.load(resolved_path, env=self.vec_env)
 
     def evaluate(
         self,
@@ -89,7 +90,12 @@ class PPOTrainer:
             truncated = False
 
             while not (terminated or truncated):
-                action, _ = self.model.predict(obs, deterministic=deterministic)
+                action_masks = get_action_masks(eval_env)
+                action, _ = self.model.predict(
+                    obs,
+                    deterministic=deterministic,
+                    action_masks=action_masks,
+                )
                 obs, reward, terminated, truncated, info = eval_env.step(int(action))
                 total_reward += float(reward)
                 total_wait_time += float(info["wait_time"])

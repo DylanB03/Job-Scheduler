@@ -46,9 +46,14 @@ class ActorCritic(nn.Module):
     def get_action_and_value(
         self,
         x: torch.Tensor,
+        action_mask: Optional[torch.Tensor] = None,
         action: Optional[torch.Tensor] = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         logits, value = self.forward(x)
+        if action_mask is not None:
+            if action_mask.dim() == 1:
+                action_mask = action_mask.unsqueeze(0)
+            logits = logits.masked_fill(~action_mask, torch.finfo(logits.dtype).min)
         distribution = Categorical(logits=logits)
         if action is None:
             action = distribution.sample()
@@ -99,6 +104,9 @@ class PPOAgent:
     def _obs_tensor(self, obs: np.ndarray) -> torch.Tensor:
         return torch.as_tensor(obs, dtype=torch.float32, device=self.device)
 
+    def _action_mask_tensor(self, action_mask: np.ndarray) -> torch.Tensor:
+        return torch.as_tensor(action_mask, dtype=torch.bool, device=self.device)
+
     def _compute_advantages(
         self,
         rewards: torch.Tensor,
@@ -141,6 +149,7 @@ class PPOAgent:
         obs, _ = self.env.reset(seed=seed)
 
         observations = []
+        action_masks = []
         actions = []
         log_probs = []
         rewards = []
@@ -160,14 +169,20 @@ class PPOAgent:
 
         while not (terminated or truncated):
             obs_tensor = self._obs_tensor(obs)
+            action_mask = self.env.action_masks()
+            action_mask_tensor = self._action_mask_tensor(action_mask)
             with torch.no_grad():
-                action, log_prob, _, value = self.agent.get_action_and_value(obs_tensor)
+                action, log_prob, _, value = self.agent.get_action_and_value(
+                    obs_tensor,
+                    action_mask=action_mask_tensor,
+                )
 
             next_obs, reward, terminated, truncated, info = self.env.step(
                 int(action.item())
             )
 
             observations.append(obs.copy())
+            action_masks.append(action_mask.copy())
             actions.append(int(action.item()))
             log_probs.append(float(log_prob.item()))
             rewards.append(float(reward))
@@ -192,6 +207,11 @@ class PPOAgent:
         observations_tensor = torch.as_tensor(
             np.asarray(observations),
             dtype=torch.float32,
+            device=self.device,
+        )
+        action_masks_tensor = torch.as_tensor(
+            np.asarray(action_masks),
+            dtype=torch.bool,
             device=self.device,
         )
         actions_tensor = torch.as_tensor(actions, dtype=torch.int64, device=self.device)
@@ -223,6 +243,7 @@ class PPOAgent:
 
         return {
             "observations": observations_tensor,
+            "action_masks": action_masks_tensor,
             "actions": actions_tensor,
             "old_log_probs": log_probs_tensor,
             "advantages": advantages,
@@ -248,6 +269,7 @@ class PPOAgent:
 
     def _update(self, rollout: dict) -> dict:
         observations = rollout["observations"]
+        action_masks = rollout["action_masks"]
         actions = rollout["actions"]
         old_log_probs = rollout["old_log_probs"]
         returns = rollout["returns"]
@@ -275,7 +297,8 @@ class PPOAgent:
 
                 _, new_log_probs, entropy, new_values = self.agent.get_action_and_value(
                     observations[minibatch_indices],
-                    actions[minibatch_indices],
+                    action_mask=action_masks[minibatch_indices],
+                    action=actions[minibatch_indices],
                 )
 
                 log_ratio = new_log_probs - old_log_probs[minibatch_indices]
@@ -411,8 +434,13 @@ class PPOAgent:
 
             while not (terminated or truncated):
                 obs_tensor = self._obs_tensor(obs)
+                action_mask_tensor = self._action_mask_tensor(self.env.action_masks())
                 with torch.no_grad():
                     logits, _ = self.agent(obs_tensor)
+                    logits = logits.masked_fill(
+                        ~action_mask_tensor.unsqueeze(0),
+                        torch.finfo(logits.dtype).min,
+                    )
                     distribution = Categorical(logits=logits)
                     if deterministic:
                         action = int(torch.argmax(logits, dim=-1).item())

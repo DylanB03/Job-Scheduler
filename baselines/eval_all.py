@@ -24,6 +24,7 @@ def print_summary_table(results: list[dict]) -> None:
         "wait",
         "tardiness",
         "miss_rate",
+        "invalid_rate",
         "drops",
         "success",
     ]
@@ -36,6 +37,7 @@ def print_summary_table(results: list[dict]) -> None:
                 f'{result["mean_wait_time"]:.2f}',
                 f'{result["mean_tardiness"]:.2f}',
                 f'{result["mean_deadline_miss_rate"]:.2f}',
+                f'{result["mean_invalid_action_rate"]:.2f}',
                 f'{result["mean_dropped_jobs"]:.2f}',
                 f'{result["success_rate"]:.2f}',
             ]
@@ -72,10 +74,11 @@ def plot_results(results: list[dict], out_dir: Path) -> Path:
         ("mean_sojourn_time", "Avg Sojourn Time"),
         ("mean_tardiness", "Avg Tardiness"),
         ("mean_deadline_miss_rate", "Deadline Miss Rate"),
+        ("mean_invalid_action_rate", "Invalid Action Rate"),
         ("mean_dropped_jobs", "Dropped Jobs"),
     ]
 
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
     axes = axes.flatten()
 
     for axis, (metric_key, metric_label) in zip(axes, metrics):
